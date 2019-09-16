@@ -36,9 +36,8 @@ def TimeHist():
     
     tdif = tdif[np.nonzero(tdif)]
     '''
-    
     bound = 2.5
-    plt.hist(tdif, bins=np.arange(-bound,bound,0.002))
+    # plt.hist(tdif, bins=np.arange(-bound,bound,0.002))
     
     # Plot histograms
 
@@ -50,36 +49,57 @@ def TimeHist():
     # Normalize to time
     measTime = 50400 # seconds
     timeHist = timeHist / measTime
+    # Determine time resolution
+    halfmax = max(timeHist)/2
+    d = np.sign(halfmax - timeHist[0:-1]) - np.sign(halfmax - timeHist[1:])
+    left_idx = np.where(d > 0)[0][0]
+    right_idx = np.where(d < 0)[-1][-1]
+    
+    timeRes = 1000*(binedges[right_idx] - binedges[left_idx])
+
     
     # Plot histograms
     centers = (binedges[:-1]+binedges[1:])/2
     width = binedges[1]-binedges[0]
     
-    plt.close()
-    plt.bar(centers, timeHist, align='center', alpha = 0.75, width = width, label = 'glass')
+   # plt.close()
+    plt.figure()
+    plt.bar(centers, timeHist, align='center', alpha = 0.75, width = width,
+     label = 'Data,\nFWHM ='+ str(round(timeRes))+ ' ps')
     
     plt.xlabel(r'$\Delta t$')
     plt.ylabel(r'Count Rate $(s^{-1})$')
     
-    plt.axis([-bound,bound,0,0.200])
+    plt.axis([-bound,bound,0,max(timeHist)])
     
-    plt.show()
+    #plt.show()
     
     # Fit Gaussian
     mean = sum(centers*timeHist)/len(centers)
     sigma = sum(timeHist*(centers-mean)**2)/len(centers)
     def gaussian(x, a, x0, sigma):
         return a*np.exp(-(x-x0)**2/(2*sigma**2))
-    popt, pcov = curve_fit(gaussian, centers, timeHist, p0 = [1, mean, sigma])
-    x = np.arange(-bound,bound,0.01)
-    plt.plot( x, gaussian(x, *popt), 'r-',label='Gaussian fit, FWHM = 318 ps')
+    popt, pcov = curve_fit(gaussian, centers, timeHist, p0 = [10000, mean, sigma])
+    x = binedges
+    y = gaussian(x, *popt)
+
+
+    plt.plot( x, y, 'r-',
+     label='Gaussian fit,\nFWHM ='+ str(round(popt[2]*2350))+ ' ps',
+     linewidth = 1)
+
+    '''
+    plt.plot( x, y, 'r-',
+     label='Gaussian fit, FWHM ='+ str(round(popt[2]*2350))+ 'ps',
+     linewidth = 1)
+    '''
     
-    plt.legend()
+    plt.legend(loc = 2)
 
     
     
-    return popt
-
+    return popt, left_idx, right_idx, d
+plt.close()
 j = TimeHist()
 
 
