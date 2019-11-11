@@ -77,11 +77,11 @@ def TimeHist():
     # Fit Gaussian
     mean = sum(centers*timeHist)/len(centers)
     sigma = sum(timeHist*(centers-mean)**2)/len(centers)
-    def gaussian(x, a, x0, sigma):
+    def _gaussian(x, a, x0, sigma):
         return a*np.exp(-(x-x0)**2/(2*sigma**2))
-    popt, pcov = curve_fit(gaussian, centers, timeHist, p0 = [10000, mean, sigma])
+    popt, pcov = curve_fit(_gaussian, centers, timeHist, p0 = [10000, mean, sigma])
     x = binedges
-    y = gaussian(x, *popt)
+    y = _gaussian(x, *popt)
 
 
     plt.plot( x, y, 'r-',

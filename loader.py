@@ -17,7 +17,8 @@ def DataLoad(pFile):
     with open(pFile) as f:
         # Load channel count
         chCount = np.loadtxt( f,  comments='#', max_rows = 1)
-        chCount = [chCount.astype(int)]
+        print(chCount)
+        chCount = chCount.astype(int)
         chNum = len(chCount)
         
         # Load data
