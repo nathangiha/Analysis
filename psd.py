@@ -10,8 +10,10 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.colors import LogNorm
 import numpy as np
+import heapq
 from scipy.optimize import leastsq
 from scipy.optimize import curve_fit
+from scipy.signal import argrelextrema
 
 #data = X14
 
@@ -50,7 +52,7 @@ def PSD_hist(binnum=300):
                     , norm=LogNorm())
     plt.colorbar()
     plt.xlim(0, ergLimit)
-    plt.ylim(0.4, 0.7) 
+    plt.ylim(0.8,1) 
     plt.xlabel(r'Pulse Integral (keVee)')
     plt.ylabel(r'Tail/Total')
 
@@ -128,11 +130,28 @@ def PSD_ergslice( pi, cal, ratio, ergbin=50, maxerg = 1000, plot=1 ):
         
         # Fit a double Gaussian to the slice
         
+        # Find local maxima
+        locmax = argrelextrema(ratioHist, np.greater)       
+        
+        xg = locmax[0][0]
+        xn = locmax[0][1]
+               
+        x01 = centers[xg]
+        x02 = centers[xn]
+        a1 = ratioHist[xg]
+        a2 = ratioHist[xn]
+        
+        print(str(i) + ' ' + str(x01) + ' ' +str(x02))
+        
+        
+        '''
+ 
         # Guesses
         a1 = max(ratioHist)
-        a2 = a1 /10
+        a2 = a1 /11
         x01 = centers[np.argmax(ratioHist)]
-        x02 = 0.69
+        x02 = 0.8891
+        '''
         sigma1 = 0.01
         sigma2 = 0.01
         
@@ -167,7 +186,7 @@ def PSD_ergslice( pi, cal, ratio, ergbin=50, maxerg = 1000, plot=1 ):
             plt.ylabel(r'Counts')
             plt.legend()
             plt.tight_layout()
-            plt.xlim(0.6,0.8)
+            plt.xlim(0,1)
             plt.savefig('PSD_'+str(lowerErg)+'_'+str(upperErg), dpi=500)
 
     return ergvec, fomvec

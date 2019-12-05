@@ -11,7 +11,7 @@ from bar import Bar
 from edgeCal import EdgeCal
 
 #X17 = DataLoad('D:\\X17data.p')
-X18 = DataLoad('D:\\X18data.p')
+X18 = DataLoad('D:\\X18data-0-20-370.p')
 #X19 = DataLoad('D:\\X19data.p')
 
 B1cs1 = Bar(X17[0],X17[1])
@@ -27,4 +27,3 @@ B11 = EdgeCal(B1cs1[0,:], histLabel='B11', xCal=0, integral = True)
 B12 = EdgeCal(B1cs2[0,:], histLabel='B12', xCal=0, integral = True)
 B21 = EdgeCal(B2cs1[0,:], histLabel='B21', xCal=0, integral = True)
 B22 = EdgeCal(B2cs2[0,:], histLabel='B22', xCal=0, integral = True)
-
