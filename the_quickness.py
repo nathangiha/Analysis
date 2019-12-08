@@ -9,10 +9,17 @@ Short script that reads my data in for debugging my bar PSD stuff
 from loader import DataLoad
 from bar import Bar
 from edgeCal import EdgeCal
-
+'''
 #X17 = DataLoad('D:\\X17data.p')
 X18 = DataLoad('D:\\X18data-0-20-370.p')
 #X19 = DataLoad('D:\\X19data.p')
+'''
+'''
+X17 = DataLoad('/media/giha/DATA/X17data.p')
+X18 = DataLoad('/media/giha/DATA/X18data-0-20-370.p')
+X19 = DataLoad('/media/giha/DATA/X19data.p')
+'''
+X18 = DataLoad('/media/giha/DATA/X18data-0-40-370.p')
 
 B1cs1 = Bar(X17[0],X17[1])
 B2cs1 = Bar(X17[2],X17[3])

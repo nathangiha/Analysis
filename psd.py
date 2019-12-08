@@ -10,54 +10,68 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.colors import LogNorm
 import numpy as np
-import heapq
 from scipy.optimize import leastsq
 from scipy.optimize import curve_fit
-from scipy.signal import argrelextrema
+from scipy.signal import argrelmax
 
 #data = X14
 
 #ph = data[0][:,0]
 #conv_factor = 0.18835
 
-data = B1cf
+#data = B1cf
 
-intg = data[0,:]
-ratio = data[3,:]
-conv_factor = 6.823
 
-# Convert to LO, electron energy equivalent
-intg = intg * conv_factor
-
-# Remove pulses above energy limit
 ergLimit = 1500
-clipped = np.where(intg < ergLimit)[0]
+
+def CalNClip(intg, ratio, conv_factor):
+    # Convert to LO
+    intconv = intg* conv_factor
 
 
-#tail = data[0][clipped,2]
-#total = data[0][clipped,3]
+    # Remove pulses above energy limit
+    ergLimit = 1500
+    clipped = np.where(intconv < ergLimit)[0]
 
 
-intg = intg[clipped]
-ratio = ratio[clipped]
-del(clipped)
-#del(tail, total)
-test = 0
+    intconv = intconv[clipped]
+    ratio = ratio[clipped]
+    
+       
+    del(clipped)
+    return [intconv, ratio]
 
-def PSD_hist(binnum=300):
+# Moving average
+def MovingAvg(spec):
+    N = 3
+    cumsum, moving_aves = [0], []
+    for i, x in enumerate(spec, 1):
+        cumsum.append(cumsum[i-1] + x)
+        if i>=N:
+            moving_ave = (cumsum[i] - cumsum[i-N])/N
+            #can do stuff with moving_ave here
+            moving_aves.append(moving_ave)
+    return moving_aves
+
+def PSD_hist(intg,ratio,binnum=300):
     plt.close()
 #    psd = plt.hist2d(ph,ratio, bins=(binnum,50*binnum ), cmap=plt.cm.jet,
  #                    norm=LogNorm())
     psd = plt.hist2d(intg,ratio, bins=(binnum,binnum ), cmap=plt.cm.jet
                     , norm=LogNorm())
+    
+    maxInd = np.where(psd[0] == np.amax(psd[0]))
+    distLoc = psd[2][maxInd[1][0]]
+    
     plt.colorbar()
     plt.xlim(0, ergLimit)
-    plt.ylim(0.8,1) 
+    plt.ylim(distLoc-0.05,distLoc+0.05) 
     plt.xlabel(r'Pulse Integral (keVee)')
     plt.ylabel(r'Tail/Total')
+    return distLoc
 
 def FOM_plot(pi, ratio):
-    fomvecs = PSD_ergslice(pi,1,ratio, plot=0)
+    fomvecs = PSD_ergslice(pi,ratio, plot=0)
     erg = fomvecs[0]
     fom = fomvecs[1]
     
@@ -80,7 +94,7 @@ def FOM_plot(pi, ratio):
 
     
 
-def PSD_ergslice( pi, cal, ratio, ergbin=50, maxerg = 1000, plot=1 ):
+def PSD_ergslice( pi, ratio, ergbin=50, cal=1,  maxerg = 1000, plot=1 ):
     
     plt.close('all')
     # Convert pulse integral (or height, I guess) to electron equivalent erg
@@ -92,7 +106,7 @@ def PSD_ergslice( pi, cal, ratio, ergbin=50, maxerg = 1000, plot=1 ):
     ratio = ratio[sort]
     
     # Create vector of bin edge ends
-    ergbin = np.arange(0,1000+ergbin,ergbin)
+    ergbin = np.arange(0,maxerg+ergbin,ergbin)
     
     # Number of energy bins
     ergBinNum=len(ergbin)-1
@@ -100,6 +114,8 @@ def PSD_ergslice( pi, cal, ratio, ergbin=50, maxerg = 1000, plot=1 ):
     # Initialize FOM vector
     ergvec = np.zeros(ergBinNum)
     fomvec = np.zeros(ergBinNum)
+    locmaxvec = np.zeros((ergBinNum,2))
+    locmaxamp = np.zeros((ergBinNum,2))
     
     # Perform plotting for each energy bin
     for i in range(ergBinNum):
@@ -120,7 +136,7 @@ def PSD_ergslice( pi, cal, ratio, ergbin=50, maxerg = 1000, plot=1 ):
         
         
         xSmooth = np.arange(lowerRatio,upperRatio, 1e-5)
-        binEdges = np.arange(lowerRatio,upperRatio, (upperRatio-lowerRatio)/binNum)
+        binEdges = np.linspace(lowerRatio,upperRatio, binNum)
         
         ratioHist = np.histogram(binRatio, bins=binEdges)[0]
         
@@ -131,17 +147,38 @@ def PSD_ergslice( pi, cal, ratio, ergbin=50, maxerg = 1000, plot=1 ):
         # Fit a double Gaussian to the slice
         
         # Find local maxima
-        locmax = argrelextrema(ratioHist, np.greater)       
+        smoothedratioHist = np.array(MovingAvg(ratioHist))
+        locmax = argrelmax(smoothedratioHist)
+        '''
+        xg = np.argmax(smoothedratioHist)+3
         
-        xg = locmax[0][0]
-        xn = locmax[0][1]
-               
+        locmaxvec[i] = locmax[0][0]
+        
+        try:
+            xn = locmax[0][np.argmin(  np.abs(locmax[0] - xg ) ) +1]+3
+        except:
+            xn = xg+13
+        '''
+        
+        
+        xg = locmax[0][0]+1
+        try:
+            xn = locmax[0][1]+1
+        except:
+            xn = xg+13
+        
         x01 = centers[xg]
         x02 = centers[xn]
+        
         a1 = ratioHist[xg]
         a2 = ratioHist[xn]
         
-        print(str(i) + ' ' + str(x01) + ' ' +str(x02))
+        locmaxvec[i][0] = x01
+        locmaxvec[i][1] = x02
+        locmaxamp[i][0] = a1
+        locmaxamp[i][1] = a2
+
+        print(str(upperErg/100) + ' ' + str(x01) + ' ' +str(x02))
         
         
         '''
@@ -152,8 +189,8 @@ def PSD_ergslice( pi, cal, ratio, ergbin=50, maxerg = 1000, plot=1 ):
         x01 = centers[np.argmax(ratioHist)]
         x02 = 0.8891
         '''
-        sigma1 = 0.01
-        sigma2 = 0.01
+        sigma1 = 0.002
+        sigma2 = 0.002
         
         # Fit double gaussian
         popt, pcov = curve_fit(_2gaussian, centers, ratioHist,   \
@@ -186,7 +223,7 @@ def PSD_ergslice( pi, cal, ratio, ergbin=50, maxerg = 1000, plot=1 ):
             plt.ylabel(r'Counts')
             plt.legend()
             plt.tight_layout()
-            plt.xlim(0,1)
+            plt.xlim(x01-0.07,x01+0.07)
             plt.savefig('PSD_'+str(lowerErg)+'_'+str(upperErg), dpi=500)
 
     return ergvec, fomvec

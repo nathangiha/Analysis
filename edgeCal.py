@@ -133,7 +133,7 @@ def EdgeCal(spec, measTime = 1800, src = 'cs', histLabel='', xCal=0, integral = 
     
     
     # Normalize spectrum to edge max
-    specHist = specHist / localmax
+    #specHist = specHist / localmax
 
     #plt.close()
     #plt.figure()
