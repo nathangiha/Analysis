@@ -24,10 +24,12 @@ from loader import DataLoad
 pFile = 'D:\\X7data.p'
 
 #data = DataLoad(pFile)
-def TimeHist():
+def TimeHist(tdif):
+    '''
     ttt = data[1][:,5] - data[0][:,5]
     cfd = data[1][:,4] - data[0][:,4]
     tdif = ttt + cfd
+    '''
     '''
     for i in range(len(cfd)):
         threshold = 10
@@ -42,13 +44,21 @@ def TimeHist():
     # Plot histograms
 
     # Histogram time bins
-    binedges = np.arange(-bound, bound, step = 0.002)
+    binedges = np.arange(-bound, bound, step = 0.01)
+    
+    # Translate to zero
+    tdif = tdif - np.average(tdif)
+    
+    
     
     timeHist, temp = np.histogram(tdif, bins = binedges)
     
+    binedges = binedges - binedges[np.argmax(timeHist)]
+    
+    
     # Normalize to time
-    measTime = 50400 # seconds
-    timeHist = timeHist / measTime
+    #measTime = 1800 # seconds
+    #timeHist = timeHist / measTime
     # Determine time resolution
     halfmax = max(timeHist)/2
     d = np.sign(halfmax - timeHist[0:-1]) - np.sign(halfmax - timeHist[1:])
@@ -67,19 +77,20 @@ def TimeHist():
     plt.bar(centers, timeHist, align='center', alpha = 0.75, width = width,
      label = 'Data,\nFWHM ='+ str(round(timeRes))+ ' ps')
     
-    plt.xlabel(r'$\Delta t$')
-    plt.ylabel(r'Count Rate $(s^{-1})$')
+    plt.xlabel(r'$\Delta t$ (ns)')
+    plt.ylabel(r'Counts')
     
     plt.axis([-bound,bound,0,max(timeHist)])
     
     #plt.show()
     
     # Fit Gaussian
-    mean = sum(centers*timeHist)/len(centers)
-    sigma = sum(timeHist*(centers-mean)**2)/len(centers)
+    a = np.max(timeHist)
+    x0 = centers[np.argmax(timeHist)]
+    sigma = 0.15 #sum(timeHist*(centers-x0)**2)/len(centers)
     def _gaussian(x, a, x0, sigma):
         return a*np.exp(-(x-x0)**2/(2*sigma**2))
-    popt, pcov = curve_fit(_gaussian, centers, timeHist, p0 = [10000, mean, sigma])
+    popt, pcov = curve_fit(_gaussian, centers, timeHist, p0 = [a, x0, sigma])
     x = binedges
     y = _gaussian(x, *popt)
 
@@ -95,12 +106,12 @@ def TimeHist():
     '''
     
     plt.legend(loc = 2)
+    plt.tight_layout()
 
     
     
-    return popt, left_idx, right_idx, d
-plt.close()
-j = TimeHist()
+    return None
+#j = TimeHist()
 
 
 

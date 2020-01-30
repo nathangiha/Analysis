@@ -54,11 +54,15 @@ def MovingAvg(spec):
     return moving_aves
 
 def PSD_hist(intg,ratio,binnum=300):
-    plt.close()
+    plt.figure()
+    
+    intp = intg[(ratio >=0) & (ratio <=1) ]
+    ratiop = ratio[(ratio >=0) & (ratio <=1) ]
+    
 #    psd = plt.hist2d(ph,ratio, bins=(binnum,50*binnum ), cmap=plt.cm.jet,
  #                    norm=LogNorm())
-    psd = plt.hist2d(intg,ratio, bins=(binnum,binnum ), cmap=plt.cm.jet
-                    , norm=LogNorm())
+    psd = plt.hist2d(intp,ratiop, bins=(binnum,binnum*10 ),\
+        range = [[0,1500],[0,1]], cmap=plt.cm.jet, norm=LogNorm())
     
     maxInd = np.where(psd[0] == np.amax(psd[0]))
     distLoc = psd[2][maxInd[1][0]]
@@ -70,8 +74,8 @@ def PSD_hist(intg,ratio,binnum=300):
     plt.ylabel(r'Tail/Total')
     return distLoc
 
-def FOM_plot(pi, ratio):
-    fomvecs = PSD_ergslice(pi,ratio, plot=0)
+def FOM_plot(pi, ratio, binsize=50):
+    fomvecs = PSD_ergslice(pi,ratio, ergbin = binsize, plot=0)
     erg = fomvecs[0]
     fom = fomvecs[1]
     
@@ -85,7 +89,7 @@ def FOM_plot(pi, ratio):
     plt.ylabel(r'$\frac{\delta}{FWHM_\gamma + FWHM_n} $')
     plt.legend()
     plt.tight_layout()
-    i=3
+    i=7
     plt.annotate(str(round(erg[i]-ergstep/2,0)) + '-' +\
                  str(round(erg[i]+ergstep/2,0))+ ' keVee, ' \
                  + str(round(fom[i],2)), (erg[i], fom[i]))
@@ -94,7 +98,7 @@ def FOM_plot(pi, ratio):
 
     
 
-def PSD_ergslice( pi, ratio, ergbin=50, cal=1,  maxerg = 1000, plot=1 ):
+def PSD_ergslice( pi, ratio, ergbin=50, maxerg = 1000, cal=1, plot=1 ):
     
     plt.close('all')
     # Convert pulse integral (or height, I guess) to electron equivalent erg

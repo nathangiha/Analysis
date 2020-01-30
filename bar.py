@@ -24,14 +24,14 @@ def Bar(bottom, top):
     zratio = bottom[:,0] / pi
     cfd = (bottom[:,4] + top[:,4]) /2
     ttt = (bottom[:,5] + top[:,5]) /2
-    tstart = cfd + ttt
+    # tstart = cfd + ttt
     #tails = bottom[:,2] + top[:,2]
     #totals = bottom[:,3] + top[:,3]
     tails = np.sqrt( bottom[:,2]**2 + top[:,2]**2  )
     totals = np.sqrt( bottom[:,3]**2 + top[:,3]**2  )
     PSDratio = tails/totals
     
-    bar = np.vstack((pi, tails, totals, PSDratio))
+    bar = np.vstack((pi, tails, totals, PSDratio, cfd, ttt))
     
     
     return bar

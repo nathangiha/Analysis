@@ -58,7 +58,7 @@ def EdgeCal(spec, measTime = 1800, src = 'cs', histLabel='', xCal=0, integral = 
         edge = naEdge
     
     
-    maxrange = max(spec)
+    maxrange = np.max(spec)# mikwa says mikwassup
     steps = 500
     width = maxrange/steps
     binedges = np.arange(0,maxrange,width)    
@@ -138,8 +138,9 @@ def EdgeCal(spec, measTime = 1800, src = 'cs', histLabel='', xCal=0, integral = 
     #plt.close()
     #plt.figure()
     if xCal ==0:
-        plt.bar(centers, specHist, align='center', alpha = 0.5, width = width,
-         label = histLabel)
+        # plt.bar(centers, specHist, align='center', alpha = 0.5, width = width,
+        # label = histLabel)
+        plt.bar(centers, specHist, align='center', alpha = 0.5, width = width)
         p = plt.plot(centers[1:-1], MovingAvg(specHist) )
 
         if integral == True:
