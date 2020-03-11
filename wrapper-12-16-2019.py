@@ -13,10 +13,10 @@ from psd import CalNClip, MovingAvg, PSD_hist, FOM_plot,PSD_ergslice
 from timeHist import TimeHist
 import matplotlib.pyplot as plt
 
-'''
+
 X23 = DataLoad('/media/giha/DATA/X23data.p')
 X24 = DataLoad('/media/giha/DATA/X24data.p')
-'''
+
 B1cs = Bar(X23[0],X23[1])
 B2cs = Bar(X23[2],X23[3])
 
