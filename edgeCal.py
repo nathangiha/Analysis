@@ -51,14 +51,14 @@ def MovingAvg(spec):
     return moving_aves
 
 # Input list of pulse heights/integrals
-def EdgeCal(spec, measTime = 1800, src = 'cs', histLabel='', xCal=0, integral = True):
+def EdgeCal(spec, measTime = 1800, src = 'cs', histLabel='', xCal=0, integral = True, edgeFrac=0.62):
     if src == 'cs':
         edge = csEdge
     if src == 'na':
         edge = naEdge
     
     
-    maxrange = np.max(spec)# mikwa says mikwassup
+    maxrange = np.max(spec) # mikwa says mikwassup
     steps = 500
     width = maxrange/steps
     binedges = np.arange(0,maxrange,width)    
@@ -71,7 +71,7 @@ def EdgeCal(spec, measTime = 1800, src = 'cs', histLabel='', xCal=0, integral = 
         n=n+1
     
     steps = 100
-    maxNew = n*width    
+    maxNew = n*width+5    
     binedges = np.arange(0, maxNew, maxNew/steps)
     specHist, temp = np.histogram(spec, bins = binedges)
     
@@ -97,7 +97,7 @@ def EdgeCal(spec, measTime = 1800, src = 'cs', histLabel='', xCal=0, integral = 
     centers_crossing_loc = zero_crossing + 2
     localmax = specHist[centers_crossing_loc]
     
-    f = 0.8 # Percentage of max for edgefinding
+    f = edgeFrac # Percentage of max for edgefinding
     
     ind_exceed = (np.where(specHist > localmax*f) )[-1]
     ind_exceed = ind_exceed[-1]
@@ -133,7 +133,7 @@ def EdgeCal(spec, measTime = 1800, src = 'cs', histLabel='', xCal=0, integral = 
     
     
     # Normalize spectrum to edge max
-    #specHist = specHist / localmax
+    specHist = specHist / localmax
 
     #plt.close()
     #plt.figure()
@@ -153,7 +153,9 @@ def EdgeCal(spec, measTime = 1800, src = 'cs', histLabel='', xCal=0, integral = 
             plt.axvline(x=edgeLoc, label= histLabel + ' edge @ '+str(round(edgeLoc,2))
             + ' $mV$', c = p[-1].get_color())
 
+        plt.xlim(left=0)
         plt.ylabel(r'Counts (normalized)')
+        plt.tight_layout()
         plt.legend()
     
     else:

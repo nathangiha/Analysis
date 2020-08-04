@@ -135,7 +135,7 @@ def FOM_plot(pi, ratio, binsize=50, maxerg= 1000):
 
     
 
-def PSD_ergslice( pi, ratio, ergbin=50, maxerg = 1000, cal=1, plot=1 ):
+def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1 ):
     
     plt.close('all')
     # Convert pulse integral (or height, I guess) to electron equivalent erg
@@ -147,7 +147,7 @@ def PSD_ergslice( pi, ratio, ergbin=50, maxerg = 1000, cal=1, plot=1 ):
     ratio = ratio[sort]
     
     # Create vector of bin edge ends
-    ergbin = np.arange(0,maxerg+ergbin,ergbin)
+    ergbin = np.arange(minerg,maxerg+ergbin,ergbin)
     
     # Number of energy bins
     ergBinNum=len(ergbin)-1
@@ -298,10 +298,10 @@ def PSD_ergslice( pi, ratio, ergbin=50, maxerg = 1000, cal=1, plot=1 ):
             plt.ylabel(r'Counts')
             plt.legend()
             plt.tight_layout()
-            plt.xlim(x01-0.07,x01+0.07)
+            plt.xlim(x01-0.01,x01+0.03)
             plt.savefig('PSD_'+str(lowerErg)+'_'+str(upperErg), dpi=500)
 
-    return ergvec, fomvec, parsmat
+    return [centers, ratioHist, ergvec, fomvec, parsmat]
         
 def _gaussian(x, a, x0, sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
