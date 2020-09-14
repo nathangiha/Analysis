@@ -52,6 +52,9 @@ def MovingAvg(spec):
 
 # Input list of pulse heights/integrals
 def EdgeCal(spec, measTime = 1800, src = 'cs', histLabel='', xCal=0, integral = True, edgeFrac=0.62):
+    print('Running EdgeCal...')
+    
+    
     if src == 'cs':
         edge = csEdge
     if src == 'na':

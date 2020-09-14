@@ -25,6 +25,7 @@ pFile = 'D:\\X7data.p'
 
 #data = DataLoad(pFile)
 def TimeHist(tdif):
+    print('Running TimeHist...')
     '''
     ttt = data[1][:,5] - data[0][:,5]
     cfd = data[1][:,4] - data[0][:,4]

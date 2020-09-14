@@ -6,7 +6,7 @@ Created on Mon Mar 30 11:22:45 2020
 
 Function for finding coincidences within a specified window (ns)
 
-Inputs: Time vec1 of length M, time vec2 if kength N, window size
+Inputs: Time vec1 of length M, time vec2 of length N, window size
 Output: Vectors of indices corresponding to coinc for vec1, vec 2 
 """
 import numpy as np

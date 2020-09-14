@@ -22,7 +22,7 @@ from scipy.signal import argrelmax
 #data = B1cf
 
 
-
+# Calibrate pulse height/integral to light output. clip at specified upper limit
 def CalNClip(intg, ratio, conv_factor, ergLimit = 1500):
     # Convert to LO
     intconv = intg* conv_factor
@@ -51,10 +51,11 @@ def MovingAvg(spec):
             moving_aves.append(moving_ave)
     return moving_aves
 
+# Generates 2D PSD histogram
 def PSD_hist(pi,ratio,binnum=300,ergLimit=1500, discLine=0, binsize=50):
     plt.figure()
     
-
+    
     
     
     intp = pi[(ratio >=0) & (ratio <=1) ]
@@ -70,14 +71,19 @@ def PSD_hist(pi,ratio,binnum=300,ergLimit=1500, discLine=0, binsize=50):
     plt.clf()
     plt.xlim(0, ergLimit)
     plt.ylim(distLoc-0.05,distLoc+0.05)
+    plt.close()
 
 
+    plt.figure()
+    
+    # Inltialize fit params
+    fitParams = []
     # If we are plotting a discrimination line (where the value of discLine is
     # the number of standard deviations away from the gamma Gaussian)
-    if discLine >0:
+    if discLine > 0:
         slices = PSD_ergslice(pi,ratio, ergbin = binsize, maxerg = ergLimit, plot=0)
-        erg = slices[0]
-        parsmat = slices[2]
+        erg = slices[2]
+        parsmat = slices[4]
         
         discPoints = parsmat[:,0,1]+ discLine * parsmat[:,0,2]
         #plt.autoscale(False)
@@ -88,6 +94,7 @@ def PSD_hist(pi,ratio,binnum=300,ergLimit=1500, discLine=0, binsize=50):
         
         eSmooth = np.arange(0,ergLimit,1)
         discFit = DiscLine(eSmooth, *popt)
+        fitParams = popt
         
         plt.plot(eSmooth, discFit, 'k', label = str(discLine)+ r'$\sigma$')
 
@@ -102,8 +109,9 @@ def PSD_hist(pi,ratio,binnum=300,ergLimit=1500, discLine=0, binsize=50):
     plt.ylabel(r'Tail/Total')
     plt.legend()
     plt.tight_layout()
+    return fitParams
  
-
+# Plots PSD figure-of-merit as a function of light output
 def FOM_plot(pi, ratio, binsize=50, maxerg= 1000):
     fomvecs = PSD_ergslice(pi,ratio, ergbin = binsize, maxerg = maxerg, plot=0)
     erg = fomvecs[0]
@@ -134,10 +142,10 @@ def FOM_plot(pi, ratio, binsize=50, maxerg= 1000):
     #    plt.annotate(str(round(erg[i],0)) + ', ' + str(round(fom[i],2)), (erg[i], fom[i]))
 
     
-
+# Fits double gaussians PSD energy slices
 def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1 ):
     
-    plt.close('all')
+    # plt.close('all')
     # Convert pulse integral (or height, I guess) to electron equivalent erg
     erg = pi * cal
     
@@ -161,7 +169,7 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
     
     # Perform plotting for each energy bin
     for i in range(ergBinNum):
-        
+        print( str( ergbin[i] ) )
         # Define energy bounds
         lowerErg = ergbin[i]
         upperErg = ergbin[i+1]
@@ -225,13 +233,11 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
             xn = xg+20
     
         '''    
-            
         xg = locmax[0][0]+1
         try:
             xn = locmax[0][1]+1
         except:
             xn = xg+20
-                
         '''        
                 
         x01 = centers[xg]
@@ -270,7 +276,7 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
         
         # Add parameters to output
         parsmat[i,0,:] = pars_g
-        parsmat[i,1,:] = pars_g
+        parsmat[i,1,:] = pars_n
         
         gauss_g = _gaussian(xSmooth, *pars_g)
         gauss_n = _gaussian(xSmooth, *pars_n)
