@@ -13,6 +13,7 @@ import numpy as np
 from scipy.optimize import leastsq
 from scipy.optimize import curve_fit
 from scipy.signal import argrelmax
+from scipy.stats import zscore
 
 #data = X14
 
@@ -81,16 +82,42 @@ def PSD_hist(pi,ratio,binnum=300,ergLimit=1500, discLine=0, binsize=50):
     # If we are plotting a discrimination line (where the value of discLine is
     # the number of standard deviations away from the gamma Gaussian)
     if discLine > 0:
-        slices = PSD_ergslice(pi,ratio, ergbin = binsize, maxerg = ergLimit, plot=0)
+        slices = PSD_ergslice(pi, ratio, ergbin = binsize, maxerg = ergLimit, plot = 0)
         erg = slices[2]
         parsmat = slices[4]
         
-        discPoints = parsmat[:,0,1]+ discLine * parsmat[:,0,2]
+        discPoints = parsmat[:,0,1]+ discLine * parsmat[:,0,2] # Mean plus some stdevs
         #plt.autoscale(False)
         #plt.scatter(erg, discPoints)
-        #plt.scatter(erg, discPoints, zorder = 1)
-        popt, pcov = curve_fit(DiscLine, erg, discPoints,   \
-                                p0 =[1, 0.1,1])
+        
+        # Remove outliers prior to fitting
+        zScoreCutoff = -1
+        zScores = np.array(zscore( discPoints ).flatten() )
+        usableIndices = np.array(np.nonzero( zScores > zScoreCutoff ) )[0]
+        
+        ergUsing = np.array(erg)[usableIndices]
+        discPointsUsing = np.array(discPoints)[usableIndices]
+        
+        deriv = np.diff(discPointsUsing)
+        print(deriv)
+        print(max(deriv))
+        
+        derivProhibitedIndices = np.argmax(np.abs(deriv) > 0.01 )
+        
+        ergUsing = np.delete(ergUsing,derivProhibitedIndices)
+        discPointsUsing = np.delete(discPointsUsing, derivProhibitedIndices)
+        
+        
+        if len(discPointsUsing) < len(discPoints):
+            print('Warning: Threw out ' + str( len(discPoints) - \
+                                              len(discPointsUsing) ) + ' slice(s)')
+        
+        plt.scatter(ergUsing, discPointsUsing, zorder = 1, c='k')
+        
+        # Perform discrimination line fit
+        popt, pcov = curve_fit(DiscLine, ergUsing, discPointsUsing,   \
+                                p0 = [0.1, 0.015, 0.76], \
+                                maxfev=10000)
         
         eSmooth = np.arange(0,ergLimit,1)
         discFit = DiscLine(eSmooth, *popt)
@@ -98,7 +125,6 @@ def PSD_hist(pi,ratio,binnum=300,ergLimit=1500, discLine=0, binsize=50):
         
         plt.plot(eSmooth, discFit, 'k', label = str(discLine)+ r'$\sigma$')
 
-    
     
     
     psd = plt.hist2d(intp,ratiop, bins=(binnum,binnum ),\
@@ -169,7 +195,9 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
     
     # Perform plotting for each energy bin
     for i in range(ergBinNum):
+        '''
         print( str( ergbin[i] ) )
+        '''
         # Define energy bounds
         lowerErg = ergbin[i]
         upperErg = ergbin[i+1]
@@ -251,9 +279,16 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
         locmaxamp[i][0] = a1
         locmaxamp[i][1] = a2
 
-        print(str(upperErg/100) + ' ' + str(x01) + ' ' +str(x02))
-        
+
+
+        # Print energy and max. found location
+        '''
+        print(str(upperErg/100) + ' ' + str(x01) + ' ' +str(x02))    
         print(str(locmax[0]))
+        '''
+        
+        
+        
         '''
  
         # Guesses
@@ -315,13 +350,13 @@ def _gaussian(x, a, x0, sigma):
 def _2gaussian(x, a1, x01, sigma1,  a2, x02, sigma2):
     return a1*np.exp(-(x-x01)**2/(2*sigma1**2)) +\
            a2*np.exp(-(x-x02)**2/(2*sigma2**2)) 
-  
+
 def DiscLine(x, a, b,c,):
     return a*np.exp( -b*x) + c
 '''
 def DiscLine(x, a, b, c, d):
     return a*x**3 + b*x**2 + c*x + d
- '''
+''' 
     
     
     
