@@ -11,15 +11,16 @@ Output: Vectors of indices corresponding to coinc for vec1, vec 2
 """
 import numpy as np
 
-def CoincFind(v1, v2, window):
+def CoincFind(v1, v2, window, dtMin = 0):
     
-    coincInd = np.full( (max( [len(v1),len(v2)] ), 2), np.nan)
+    coincInd = np.full((max( [len(v1),len(v2)] ), 2), np.nan)
 
     i = 0
     for n in range(len(v1)):
         while( v1[n] + window > v2[i]):
-            if( v1[n] - window < v2[i] and v1[n] + window > v2[i]):
-                coincInd[n,:] = [n,i]
+            if( (v1[n] - window < v2[i]) and (v1[n] + window > v2[i])):
+                if np.abs(v1[n] - v2[i]) >= dtMin:
+                    coincInd[n, :] = [n, i]
             if i < len(v2)-1:
                 i+=1
             else:

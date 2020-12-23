@@ -9,18 +9,19 @@ A script for creating an image file from glass H2DPI calibrations
 
 
 import numpy as np
-from loader import DataLoad
-from bar import Bar, Bars
-from edgeCal import EdgeCal
-from psd import CalNClip, MovingAvg, PSD_hist, FOM_plot, PSD_ergslice, DiscLine
-from timeHist import TimeHist
 import matplotlib.pyplot as plt
-from coincFinder import CoincFind
 from scipy.optimize import curve_fit
 from scipy import interpolate
 from mpl_toolkits.mplot3d import Axes3D
 
 
+from loader import DataLoad
+from bar import Bar, Bars
+from edgeCal import EdgeCal
+from psd import CalNClip, MovingAvg, PSD_hist, FOM_plot, PSD_ergslice, DiscLineN
+from timeHist import TimeHist
+from coincFinder import CoincFind
+from sbp import SBP
 
 
 
@@ -28,7 +29,7 @@ from mpl_toolkits.mplot3d import Axes3D
 ##############################################################################
 ##############################################################################
 ##############################################################################
-
+unitConv = 1.03642697
 
 
 
@@ -40,7 +41,7 @@ def _InvPowerLaw(L, a, b):
     return (L / a)**(1/b)
 
 def _InvZPos(ratio, p):
-    heights = np.linspace(-25,75,1e4)
+    heights = np.linspace(-5,55,int(1e4))
     ratios = p[0]*heights**3 + p[1]*heights**2 + p[2]*heights + p[3]
     findRatio = interpolate.interp1d(ratios, heights)
     return findRatio(ratio)
@@ -70,12 +71,15 @@ def GetLeverAlpha(d1,d2,tof,e1):
     nmass = 1.008665 # amu
     
     etof = 0.5 * nmass * (dtof/tof)**2
-    etof = etof * 1.03642697  # amu (cm/ns)^2 to MeV
+    etof = etof * unitConv  # amu (cm/ns)^2 to MeV
     alpha = etof/ (etof + e1)
     
     
-    return tail, vectof, alpha, etof, tof
+    return tail, vectof, alpha, etof, dtof
 
+# Converts alpha value to more easily readable scattering angle
+def alphaToAngle(alpha):
+    return np.arccos(  np.sqrt( alpha ) )
 
 
 ##############################################################################
@@ -110,7 +114,7 @@ if load:
     # Load in data and calibrations
     lightOutputCal = np.loadtxt('figures\\lightOutputCurves.txt')
     zPosCal = np.loadtxt('figures\\posFit.txt')
-    X69 = DataLoad('d:\X69data.p')
+    X69 = DataLoad('D:\X69data.p')
     barData = Bars(X69)
 
 
@@ -124,15 +128,17 @@ eventNums = np.zeros( barNum )
 # Calibrate and apply PSD cuts
 loadCal = False
 if loadCal:
-    csCalData = Bars( DataLoad('D:\X68data.p') )
+    csCalDataImageBef = Bars( DataLoad('D:\X68data.p') )
+    csCalDataImageAft = Bars( DataLoad('D:\X70data.p') )
+    
 
 psdSigma = 4
 
-calibrate = True
+calibrate = False
 if calibrate:
-    csCals = []
-    for i in range(len(csCalData)):
-        csCals.append( EdgeCal( csCalData[i][0,:], histLabel = 'Bar '+str(i), xCal=0, integral = True ) )
+    csCalsImage = []
+    for i in range(len(csCalDataImage)):
+        csCalsImage.append( EdgeCal( csCalDataImage[i][0,:], histLabel = 'Bar '+str(i), xCal=0, integral = True ))
     
     
     
@@ -140,40 +146,40 @@ if calibrate:
     fitParams = []
     for i in range(len(barData)):
         print('PSD on bar ' + str(i))
-        psdData.append( CalNClip(barData[i][0,:], barData[i][3,:], csCals[i][0] ) )
+        psdData.append( CalNClip(barData[i][0,:], barData[i][3,:], csCalsImage[i][0] ) )
         fitParams.append( PSD_hist( psdData[i][0], psdData[i][1] , \
                                    ergLimit=1000, discLine=psdSigma  )  )
         plt.title('bar ' + str(i))
+        plt.tight_layout()
 
 
-applyPSD = True
+applyPSD = False
 if applyPSD:
     nBarData = []
 
     for i in range(barNum):
         # Get PSD line fit params
-        a = fitParams[i][0]
-        b = fitParams[i][1]
-        c = fitParams[i][2]
             
         # Get LO and tail/total
-        barLO       = barData[i][0,:]*csCals[i][0]
+        barLO       = barData[i][0,:]*csCalsImage[i][0]
         barPSDRatio = barData[i][3,:]
 
         # Find neutron indices
-        neutronInds = np.nonzero(barPSDRatio > DiscLine(barLO, a, b, c))[0]
+        neutronInds = np.nonzero(barPSDRatio > DiscLineN(barLO, *fitParams[i]))[0]
         
         # Construct nBarData
         nBarData.append( barData[i][:,neutronInds] )
-        PSD_hist(nBarData[i][0,:]*csCals[i][0], nBarData[i][3,:])
+        
+        PSD_hist(nBarData[i][0,:]*csCalsImage[i][0], nBarData[i][3,:])
         plt.title('Bar ' + str(i))
         plt.savefig('results\\bar' + str(i)+'psd.png')
+        
 
 applyEnergyThreshold = True
 if applyEnergyThreshold:
-    loThreshold = 100 # keVee
+    loThreshold = 300 # keVee
     for i in range(barNum):
-        barLO = nBarData[i][0,:] * csCals[i][0]
+        barLO = nBarData[i][0,:] * csCalsImage[i][0]
         lowerCut = np.nonzero(barLO > loThreshold)[0]
         nBarData[i] = nBarData[i][:, lowerCut]
 
@@ -217,7 +223,7 @@ if findCoinc:
         for j in range(i+1, barNum):
             print(i,j)
             channels.append((i,j))
-            coince = CoincFind(timesList[i], timesList[j],10)
+            coince = CoincFind(timesList[i], timesList[j], 8, dtMin = 0.3)
             numDoubles += np.size(coince, axis=0)
             coincidences.append( coince  )
             if coince.size == 0:
@@ -249,8 +255,9 @@ cones = True
 if cones:
     coneMat = np.zeros((numDoubles, 8))
     flightPaths = np.zeros((numDoubles,7))
+    energies = np.zeros((numDoubles, 4))
     
-    coneMat[:,7]= 0.005   
+    coneMat[:,7]= 0.005
     eventsWritten = 0
     
     numPairs = len(coincidences)
@@ -280,18 +287,20 @@ if cones:
         dts = ttts + cfds
         
         # Get E1
-        b1LOs = nBarData[b1][0,b1Inds] * csCals[b1][0]
-        B1Es = _InvPowerLaw(b1LOs, a = lightOutputCal[0,0], b = lightOutputCal[0,1])
+        b1LOs = nBarData[b1][0,b1Inds] * csCalsImage[b1][0]
+        B1Es = _InvPowerLaw(b1LOs,
+                            a = lightOutputCal[b1, 0],
+                            b = lightOutputCal[b1, 1])
         # Get z's
-        b1zratios = nBarData[b1][6,b1Inds]
-        b2zratios = nBarData[b2][6,b2Inds]
+        b1zratios = nBarData[b1][6, b1Inds]
+        b2zratios = nBarData[b2][6, b2Inds]
                 
         b1Zs = _InvZPos(b1zratios, zPosCal[b1]) / 10 # mm to cm
         b2Zs = _InvZPos(b2zratios, zPosCal[b2]) / 10 # mm to cm
         
         # Construct x,y,z interaction locations
-        xyz1 = np.zeros((numPairDoubles,3))
-        xyz2 = np.zeros((numPairDoubles,3))
+        xyz1 = np.zeros((numPairDoubles, 3))
+        xyz2 = np.zeros((numPairDoubles, 3))
         
         xyz1[:,:2] = xy1
         xyz2[:,:2] = xy2
@@ -302,38 +311,58 @@ if cones:
         coneMat[eventsWritten:eventsWritten+numPairDoubles,0:3] = xyz1
         coneMat[eventsWritten:eventsWritten+numPairDoubles,3:6] = xyz2
         
-        '''
-        print (dts[:10])
-        plt.figure()
-        plt.hist(dts,bins=100)
-        '''
 
         for j in range(numPairDoubles):
             indexOverall = eventsWritten + j
             tof = dts[j]
             pos1 = xyz1[j]
             pos2 = xyz2[j]
+            E1 = B1Es[j] / 1000 # Convert to MeV
             if tof < 0:
                 temp = pos1
                 pos1 = pos2
                 pos2 = temp
             
-            [tail, lever, alpha, Etof, TOF] = GetLeverAlpha(pos1, pos2, tof, B1Es[j]/1000 )
+            [tail, lever, alpha, Etof, dist] = GetLeverAlpha(pos1, pos2, tof, E1 )
+            coneMat[indexOverall, 0:3] = pos1
+            coneMat[indexOverall, 3:6] = pos2
             coneMat[indexOverall, 6] = alpha
             flightPaths[indexOverall, :3] = tail
             flightPaths[indexOverall, 3:6] = lever
             flightPaths[indexOverall, 6] = alpha
             
+            energies[indexOverall, :] = [E1, Etof, tof, dist]
+                        
         
         tempfile = 'results\\glassConesTemp.p'
         np.savetxt(tempfile, coneMat[eventsWritten:eventsWritten+j])
         SBP(tempfile)
         pair = str(b1) + '-' + str(b2) 
-        plt.title(pair)
+        plt.title(pair + ', ' + str(numPairDoubles) + ' cones')
         plt.savefig('results\\' + pair + 'image.png' )           
             
         eventsWritten += numPairDoubles
-        
+
+
+
+# Write to imaging outfile  
+write = True
+if write:
+    print('Writing to file...')
+    f = open(outfile, 'w')
+    np.savetxt(f, coneMat)        
+f.close()    
+
+print('Projecting...')
+SBP(outfile)
+plt.title(str(numDoubles) + ' cones')
+plt.tight_layout()
+plt.savefig('results\\image.png')
+
+
+
+print('Quivering...')
+# Make visual plot of lever arms        
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 flightPathsPlot = flightPaths[np.floor(np.linspace(0,numDoubles-1,500)).astype(int),:  ]
@@ -345,19 +374,22 @@ ax.set_ylim([-2, 1])
 ax.set_zlim([-1, 6])
 plt.savefig('results\\quiver.png')
 
-      
-write = True
-if write:
-    f = open(outfile, 'w')
-    np.savetxt(f, coneMat)        
-f.close()    
 
-SBP(outfile)
-plt.savefig('results\\image.png')
+# Make histogram of scattering angles
+fig, ax1 = plt.subplots()
+color = 'tab:red'
+angles = alphaToAngle( coneMat[:,6] )
+ax1.hist(angles, bins = 50, color = color, alpha = 0.7)
+ax1.set_xlabel('Scattering angle (rad.)', color = color)
+ax1.tick_params(axis='x', labelcolor=color)
 
-
-
-
+ax2 = ax1.twiny()
+color = 'tab:blue'
+ax2.set_xlabel('Scattering angle (deg.)', color = color)
+anglesDeg = angles * 180 / np.pi
+anglesDegHist = ax2.hist(anglesDeg, bins = 50, color = color, alpha = 0.7)
+ax2.tick_params(axis='x', labelcolor=color)
+plt.savefig('results\\angles.png')
 
 
 

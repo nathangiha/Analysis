@@ -29,7 +29,7 @@ import time
 
 
 # Source location
-srcloc = (0, -0.5)
+srcloc = (-0.378, 2.98)
 sw = 20
 sh= 20
 
@@ -72,7 +72,7 @@ def SBPPlot(mat):
     
     fig, ax = plt.subplots()
     
-    cs = plt.imshow(mat, cmap='jet',  aspect = 'auto', origin='lower')
+    cs = plt.imshow(mat, cmap = 'jet',  aspect = 'auto', origin = 'lower')
     norm= col.LogNorm(vmin= np.max(mat)*1e-12, vmax=np.max(mat))
     
     #norm= col.LogNorm(vmin=1e-3, vmax=cs.cvalues.max())
@@ -98,11 +98,11 @@ def SBPPlot(mat):
     
     
     # Create a Rectangle patch
-    ell = patches.Ellipse((179.5 + srcloc[0], 89.5 + srcloc[1]),sw, sh,linewidth=1,edgecolor='r',facecolor='none')
+    ell = patches.Ellipse((179.5 + srcloc[0], 89.5 + srcloc[1]),sw, sh,linewidth=1,edgecolor='w',facecolor='none')
 
     # Add the patch to the Axes
     ax.add_patch(ell)
-
+    plt.tight_layout()
     
     return
     
@@ -130,11 +130,15 @@ def SBP(conefile):
     simdata = np.loadtxt(conefile)
     if not simdata.size:
         return
-    
-    v1 = simdata[:,0:3]
-    v2 = simdata[:,3:6]
-    alphas = simdata[:,6]
-    varAlphas = simdata[:,7]
+
+    try:
+        v1 = simdata[:, 0:3]
+        v2 = simdata[:, 3:6]
+        alphas = simdata[:,6]
+        varAlphas = simdata[:,7]
+    except:
+        print('Threw out pair with 1 cone')
+        return        
     del simdata
     
     sigB = 0.001

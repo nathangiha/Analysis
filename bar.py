@@ -20,8 +20,8 @@ def Bar(bottom, top):
 #bottom = X18[0]
 #top = X18[1]
 
-    barBotTime = bottom[:,4] + bottom[:,5]
-    barTopTime = top[:,4] + top[:,5]
+    barBotTime = bottom[:,4].astype(np.longdouble) + bottom[:,5].astype(np.longdouble)
+    barTopTime = top[:,4].astype(np.longdouble) + top[:,5].astype(np.longdouble)
 
 
     barCoinc = CoincFind(barBotTime, barTopTime, 5)
@@ -58,7 +58,7 @@ def Bars(filedata):
     for i in range(barNum):
         temp = Bar( filedata[2*i], filedata[2*i+1]     )
         bardata.append(temp)
-        
+    print('Done.')
     return bardata
 
 

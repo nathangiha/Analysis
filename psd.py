@@ -12,7 +12,7 @@ from matplotlib.colors import LogNorm
 import numpy as np
 from scipy.optimize import leastsq
 from scipy.optimize import curve_fit
-from scipy.signal import argrelmax
+from scipy.signal import find_peaks
 from scipy.stats import zscore
 
 #data = X14
@@ -22,9 +22,23 @@ from scipy.stats import zscore
 
 #data = B1cf
 
+def barsPSD(barList, _binnum=300, _ergLimit=1000, _discLine=0, _binsize=50):
+    numFits = len(barList)
+    print(numFits)
+    
+    psdData = []
+    fitParams = []
+    
+
+    for i in range(numFits):
+        barPSD = CalNClip(barList[i][0,:], barList[i][3,:])
+        psdData.append( barPSD )
+        fitParams.append(PSD_hist(barPSD[0], barPSD[1], binnum = _binnum, ergLimit = _ergLimit, discLine = _discLine))
+        
+    return psdData, fitParams
 
 # Calibrate pulse height/integral to light output. clip at specified upper limit
-def CalNClip(intg, ratio, conv_factor, ergLimit = 1500):
+def CalNClip(intg, ratio, conv_factor = 1, ergLimit = 1500):
     # Convert to LO
     intconv = intg* conv_factor
 
@@ -53,7 +67,7 @@ def MovingAvg(spec):
     return moving_aves
 
 # Generates 2D PSD histogram
-def PSD_hist(pi,ratio,binnum=300,ergLimit=1500, discLine=0, binsize=50):
+def PSD_hist(pi, ratio, parType = 'n', binnum=300, ergLimit=1500, discLine=0, binsize=50):
     plt.figure()
     
     
@@ -64,18 +78,22 @@ def PSD_hist(pi,ratio,binnum=300,ergLimit=1500, discLine=0, binsize=50):
     
 #    psd = plt.hist2d(ph,ratio, bins=(binnum,50*binnum ), cmap=plt.cm.jet,
  #                    norm=LogNorm())
-    psd = plt.hist2d(intp,ratiop, bins=(binnum,binnum*10 ),\
-        range = [[0,ergLimit],[0,1]], cmap=plt.cm.jet, norm=LogNorm())
+    psd = plt.hist2d(intp, ratiop, bins = (binnum, binnum * 10),\
+        range = [[0, ergLimit], [0, 1]], cmap = plt.cm.jet, norm = LogNorm())
     
     maxInd = np.where(psd[0] == np.amax(psd[0]))
     distLoc = psd[2][maxInd[1][0]]
     plt.clf()
     plt.xlim(0, ergLimit)
-    plt.ylim(distLoc-0.05,distLoc+0.05)
+    
+    # Set ratio bounds
+    lowerRatio = distLoc - 0.2
+    upperRatio = distLoc + 0.2
+    plt.ylim(lowerRatio, upperRatio)
     plt.close()
 
 
-    plt.figure()
+    plt.figure(figsize = (7, 4))
     
     # Inltialize fit params
     fitParams = []
@@ -84,55 +102,107 @@ def PSD_hist(pi,ratio,binnum=300,ergLimit=1500, discLine=0, binsize=50):
     if discLine > 0:
         slices = PSD_ergslice(pi, ratio, ergbin = binsize, maxerg = ergLimit, plot = 0)
         erg = slices[2]
-        parsmat = slices[4]
+        parsMat = slices[4]
+        gPars = parsMat[:,0,:]
+        nPars = parsMat[:,1,:]
         
-        discPoints = parsmat[:,0,1]+ discLine * parsmat[:,0,2] # Mean plus some stdevs
+        plotSigma = 6
+        lowerRatio = gPars[2,1] - plotSigma * gPars[2,2]
+        upperRatio = nPars[2,1] + plotSigma * nPars[2,2]
+        
+        if parType == 'g':
+            discPoints = nPars[:,1] - discLine * nPars[:,2] # Mean minus some stdevs
+        else:            
+            discPoints = gPars[:,1] + discLine * gPars[:,2] # Mean plus some stdevs
         #plt.autoscale(False)
         #plt.scatter(erg, discPoints)
         
         # Remove outliers prior to fitting
-        zScoreCutoff = -1
+        zScoreMin = -5
+        zScoreMax = 5
         zScores = np.array(zscore( discPoints ).flatten() )
-        usableIndices = np.array(np.nonzero( zScores > zScoreCutoff ) )[0]
+        
+        # print(zScores)
+        
+        upperCut = np.nonzero(zScores < zScoreMax)[0]
+        lowerCut = np.nonzero(zScores > zScoreMin)[0]
+        usableIndices = np.intersect1d(upperCut, lowerCut)
         
         ergUsing = np.array(erg)[usableIndices]
         discPointsUsing = np.array(discPoints)[usableIndices]
         
         deriv = np.diff(discPointsUsing)
+        '''
         print(deriv)
         print(max(deriv))
-        
-        derivProhibitedIndices = np.argmax(np.abs(deriv) > 0.01 )
+        '''
+        '''
+        derivProhibitedIndices = np.argmax(np.abs(deriv) > 0.01)
         
         ergUsing = np.delete(ergUsing,derivProhibitedIndices)
         discPointsUsing = np.delete(discPointsUsing, derivProhibitedIndices)
-        
+        '''
         
         if len(discPointsUsing) < len(discPoints):
             print('Warning: Threw out ' + str( len(discPoints) - \
                                               len(discPointsUsing) ) + ' slice(s)')
         
-        plt.scatter(ergUsing, discPointsUsing, zorder = 1, c='k')
+        plt.scatter(ergUsing, discPointsUsing, zorder = 1, s = 15, c='k')
+        plt.errorbar(ergUsing, discPointsUsing, xerr = binsize/2, \
+                     capsize = 5,fmt = 'none', zorder = 1, c='k')
+        
+        numPointsToPlot = len(discPointsUsing)       
+        fitWeights = np.ones(numPointsToPlot)
+        
+        
+        for i in range(numPointsToPlot):
+            fitWeights[i] = 0.5 + np.exp(- i)
+            
+        fitWeights[0] = np.max(fitWeights) * 100
+        # print(fitWeights)
+        # print(len(fitWeights))
+        
         
         # Perform discrimination line fit
-        popt, pcov = curve_fit(DiscLine, ergUsing, discPointsUsing,   \
-                                p0 = [0.1, 0.015, 0.76], \
-                                maxfev=10000)
-        
-        eSmooth = np.arange(0,ergLimit,1)
-        discFit = DiscLine(eSmooth, *popt)
-        fitParams = popt
+        if parType == 'g':
+            guessIntercept = nPars[1,1] - discLine * nPars[1,2]
+            # print('Intercept guess: ' + str(guessIntercept))
+
+            popt, pcov = curve_fit(DiscLineN, ergUsing, discPointsUsing,   \
+                                    p0 = [-0.15, 0, -0.15, 0.016, guessIntercept], \
+                                    sigma = fitWeights, maxfev=100000)
+            # print(popt)
+            eSmooth = np.arange(0,np.max(ergUsing),1)
+            discFit = DiscLineN(eSmooth, *popt)
+            fitParams = popt
+            
+        else:
+            guessIntercept = gPars[1,1] + discLine * gPars[1,2]
+
+            popt, pcov = curve_fit(DiscLineN, ergUsing, discPointsUsing,   \
+                                    p0 = [0.1, 0.015, 0, 0, guessIntercept], \
+                                    sigma = fitWeights, maxfev=100000)
+            
+            eSmooth = np.arange(0,np.max(ergUsing),1)
+            discFit = DiscLineN(eSmooth, *popt)
+            fitParams = popt
         
         plt.plot(eSmooth, discFit, 'k', label = str(discLine)+ r'$\sigma$')
 
     
     
-    psd = plt.hist2d(intp,ratiop, bins=(binnum,binnum ),\
-        range = [[0,ergLimit],[distLoc-0.05,distLoc+0.05]], cmap=plt.cm.jet,\
+    psd = plt.hist2d(intp,ratiop, bins=(binnum, binnum),\
+        range = [[0, ergLimit],[lowerRatio, upperRatio]], cmap=plt.cm.jet,\
         zorder = 0, norm=LogNorm())
+    '''
+    
+    psd = plt.hist2d(intp,ratiop, bins=(binnum,binnum ),\
+        range = [[0,ergLimit],[0, 1]], cmap=plt.cm.jet,\
+        zorder = 0, norm=LogNorm())
+    '''
     plt.colorbar()
-    plt.xlabel(r'Pulse Integral (keVee)')
-    plt.ylabel(r'Tail/Total')
+    plt.xlabel(r'Light output (keVee)')
+    plt.ylabel(r'$r_{PSD}')
     plt.legend()
     plt.tight_layout()
     return fitParams
@@ -169,7 +239,7 @@ def FOM_plot(pi, ratio, binsize=50, maxerg= 1000):
 
     
 # Fits double gaussians PSD energy slices
-def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1 ):
+def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=True ):
     
     # plt.close('all')
     # Convert pulse integral (or height, I guess) to electron equivalent erg
@@ -208,7 +278,7 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
         
         # Create histogram
         binRatio = ratio[lowerInd:upperInd]
-        binNum = 1000
+        binNum = 500
         upperRatio = 1
         lowerRatio = 0
         
@@ -217,7 +287,7 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
         binEdges = np.linspace(lowerRatio,upperRatio, binNum)
         
         ratioHist = np.histogram(binRatio, bins=binEdges)[0]
-        
+                
         # Make bar graph stuff
         centers = (binEdges[:-1]+binEdges[1:])/2
         width = binEdges[1]-binEdges[0]
@@ -225,8 +295,11 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
         # Fit a double Gaussian to the slice
         
         # Find local maxima
-        smoothedratioHist = np.array(MovingAvg(ratioHist))
-        locmax = argrelmax(smoothedratioHist)
+        smoothedRatioHist = np.array(MovingAvg(ratioHist))
+        histMax = np.max(smoothedRatioHist)
+        # locmax = argrelmax(smoothedRatioHist)
+        locmax = find_peaks(smoothedRatioHist, distance = 5, height = histMax / 10)[0]
+        
         '''
         xg = np.argmax(smoothedratioHist)+3
         
@@ -240,15 +313,18 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
         
         
         
-        xg = locmax[0][0]+1
-        j = 0
+        xg = locmax[0]+1
+        try:
+            xn = locmax[1]+1
+        except:
+            xn = xg + 10
         
         # While loop acts as high-pass filter in histogram, filtering out
         # low-amplitude noise before choosing maxima
         
-        
+        '''
         while (ratioHist[xg]< 15):
-            xg = locmax[0][j]+1
+            xg = locmax[j]+1
             j = j+1
         try:
             xn = locmax[0][j+1]+1
@@ -260,7 +336,7 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
         if xn > xg+50:
             xn = xg+20
     
-        '''    
+            
         xg = locmax[0][0]+1
         try:
             xn = locmax[0][1]+1
@@ -309,6 +385,10 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
         pars_g = popt[0:3]
         pars_n = popt[3:6]
         
+        # Go to next iteration if gamma peak is smaller than neutron peak
+        if pars_g[0] < pars_n[0]:
+            continue
+    
         # Add parameters to output
         parsmat[i,0,:] = pars_g
         parsmat[i,1,:] = pars_n
@@ -316,11 +396,11 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
         gauss_g = _gaussian(xSmooth, *pars_g)
         gauss_n = _gaussian(xSmooth, *pars_n)
         
-        fom = (pars_n[1] - pars_g[1]) / (2.355*(abs(pars_g[2])+abs(pars_n[2])))     
+        fom = (pars_n[1] - pars_g[1]) / (2 * np.sqrt(2 * np.log(2)) *(abs(pars_g[2])+abs(pars_n[2])))     
         fomvec[i] = fom
-        ergvec[i] = (lowerErg+upperErg)/2
+        ergvec[i] = (lowerErg + upperErg)/2
         
-        if plot != 0:
+        if plot:
             # Plot everything
             plt.figure()
 
@@ -339,7 +419,7 @@ def PSD_ergslice( pi, ratio, ergbin=50, minerg = 0, maxerg = 1000, cal=1, plot=1
             plt.ylabel(r'Counts')
             plt.legend()
             plt.tight_layout()
-            plt.xlim(x01-0.01,x01+0.03)
+            plt.xlim(x01-0.1,x01+0.3)
             plt.savefig('PSD_'+str(lowerErg)+'_'+str(upperErg), dpi=500)
 
     return [centers, ratioHist, ergvec, fomvec, parsmat]
@@ -351,12 +431,15 @@ def _2gaussian(x, a1, x01, sigma1,  a2, x02, sigma2):
     return a1*np.exp(-(x-x01)**2/(2*sigma1**2)) +\
            a2*np.exp(-(x-x02)**2/(2*sigma2**2)) 
 
-def DiscLine(x, a, b,c,):
-    return a*np.exp( -b*x) + c
+def DiscLineN(x, a, b, a2, b2, c):
+    return a*np.exp( -b*x) + a2*np.exp(-b2*x) + c
 '''
-def DiscLine(x, a, b, c, d):
+def DiscLineG(x, a, b,c,):
+    return -a*np.exp( -b*x) + c
+'''
+def DiscLineG(x, a, b, c, d):
     return a*x**3 + b*x**2 + c*x + d
-''' 
+ 
     
     
     

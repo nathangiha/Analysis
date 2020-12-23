@@ -33,7 +33,7 @@ def FWHM(x, hist):
     right = lin_interp(x, hist, zero_crossings_i[1], half)
     return right - left
 
-def TOFtoEnergy(tof, pathlength = 40.64 ): #tof in ns, pathlength in cm
+def TOFtoEnergy(tof, pathlength = 36.2 ): #tof in ns, pathlength in cm
     massNeutron = 1.008665 # amu
     
     convFactor = 1.03642697 # MeV per amu * (cm/ns)^2
@@ -63,6 +63,8 @@ def FitLightOutput(energy, lightOutput, aGuess, bGuess):
                                 p0 =[aGuess, bGuess], maxfev=10000)
         return popt
     
+def _gaussian(x, a, x0, sigma):
+    return a*np.exp(-(x-x0)**2/(2*sigma**2))
     
     
 
@@ -79,10 +81,10 @@ psdSigma = 4
 results_dir = 'C:\\Users\\giha\\Documents\\Repos\\Analysis\\figures\\'
 
 
-flightTime = 1.356 #ns
+flightTime = 1.207 #1.356 #ns
 
-barNum = 1
-
+barNum = 4
+plotSlices = False
 
 ##############################################################################
 ##############################################################################
@@ -119,21 +121,21 @@ fname = 'X30'
 ### Calibration and PSD for bars
 
 
-calibrate = True
+calibrate = False
 
 if calibrate:
-    csCals = []
+    csCalsTof = []
     for i in range(len(csCalData)):
-        csCals.append( EdgeCal( csCalData[i][0,:], histLabel = 'Bar '+str(i), xCal=0, integral = True ) )
+        csCalsTof.append( EdgeCal( csCalData[i][0,:], histLabel = 'Bar '+str(i), xCal=0, integral = True ) )
         plt.savefig(results_dir + fname + 'csCals.png')
     
     
     
-    psdData = []
-    fitParams = []
+    psdDataLO = []
+    fitLOParams = []
     for i in range(len(nTOFData)):
-        psdData.append( CalNClip(nTOFData[i][0,:], nTOFData[i][3,:], csCals[i][0] ) )
-        fitParams.append( PSD_hist( psdData[i][0], psdData[i][1] , \
+        psdDataLO.append( CalNClip(nTOFData[i][0,:], nTOFData[i][3,:], csCalsTof[i][0] ) )
+        fitLOParams.append( PSD_hist( psdDataLO[i][0], psdDataLO[i][1] , \
                                    ergLimit=1400, discLine=psdSigma  )    \
                         )
         plt.savefig(results_dir + fname+ 'bar' + str(i)+'PSD.png')
@@ -145,12 +147,14 @@ if calibrate:
     tagCal = EdgeCal( tagCalData[:,0], histLabel = 'Tag', xCal=0, integral=True)
     
     tagData = X30[8]
+    '''
     tagPI = tagData[:,0]
     tagTails = tagData[:,2]
     tagTotals = tagData[:,3]
     tagRatio = tagTails / tagTotals
     tagPSD = CalNClip( tagPI, tagRatio, tagCal[0])
     PSD_hist( tagPSD[0], tagPSD[1], ergLimit=1000, discLine=4  )
+    '''
 
 
 
@@ -203,13 +207,13 @@ for i in range(barNum):
     barAllEvents = Bar(bot,top)
     
     # Now, get rid of gamma events
-    barLO       = barAllEvents[0,:]*csCals[i][0]
+    barLO       = barAllEvents[0,:]*csCalsTof[i][0]
     barPSDRatio = barAllEvents[3,:]
     
     # Fit parameters
-    a = fitParams[i][0]
-    b = fitParams[i][1]
-    c = fitParams[i][2]
+    a = fitLOParams[i][0]
+    b = fitLOParams[i][1]
+    c = fitLOParams[i][2]
     
     neutronInds = np.argwhere(  barPSDRatio > DiscLine(barLO, a, b, c  ) )[:,0]
  
@@ -240,7 +244,7 @@ for i in range(barNum):
     if fname =='X30':
         barNEvents = barAllEvents [ :,  neutronInds     ]
     
-        PSD_hist( barNEvents[0,:]*csCals[i][0], barNEvents[3,:]   )
+        PSD_hist( barNEvents[0,:]*csCalsTof[i][0], barNEvents[3,:]   )
         plt.savefig(results_dir + fname+ 'bar' + str(i)+'PSDcut.png')
 
         barTime = barNEvents[4,:] + barNEvents[5,:]    
@@ -263,7 +267,7 @@ for i in range(barNum):
     cfd = ( botCoinc[:,4] + topCoinc[:,5] ) / 2.0 - tagCoinc[:,5]
     '''   
     cfd = barCoinc[4,:] - tagCoinc[:,4]
-    ttt = barCoinc[5,:].astype(np.int64) - tagCoinc[:,5].astype(np.int64)
+    ttt = barCoinc[5,:] - tagCoinc[:,5]
     
     dt = ttt + cfd
     meanDt = np.mean(dt)
@@ -275,11 +279,25 @@ for i in range(barNum):
     
     if fname == 'X29':
         binedges = np.linspace(-5+meanDt,5+meanDt,301)
-        hist = plt.hist(dt, bins=binedges, label = r'$\mu =$' + str(np.round(meanDt,5)))
         centers = (binedges[:-1] + binedges[1:]) / 2
-
+        hist = plt.hist(dt, bins=binedges)[0]
+        plt.close()
+        plt.figure()
+        # Gaussian guesses
+        a = np.max(hist)
+        x0 = meanDt
+        sigma = 0.5
+        
+        # Fit double gaussian
+        popt, pcov = curve_fit(_gaussian, centers, hist,   \
+                                p0 =[a, x0, sigma], maxfev=10000)
     
-        plt.xlim(-5 + meanDt, 5 + meanDt)
+        gauss_g = _gaussian(centers, *popt)
+        fitMean = popt[1]
+        hist = plt.hist(dt, bins=binedges, label = r'$\mu =$' + str(np.round(fitMean,5)))[0]
+        
+        plt.plot(centers, gauss_g, color = 'k', label = 'Fit')
+        plt.xlim(-5 + fitMean, 5 + fitMean)
         plt.title('Bar '+ str(i))
         plt.legend()
         plt.xlabel(r'$\Delta$t (ns)')
@@ -287,8 +305,8 @@ for i in range(barNum):
         plt.tight_layout()
         plt.savefig(results_dir + fname+ 'bar' + str(i)+'TOF.png')
     
-        offset.append(meanDt)
-        fwhm.append( FWHM(centers, hist[0] )   )
+        offset.append(fitMean)
+        fwhm.append( FWHM(centers, hist )   )
       
     if fname == 'X30':
         # Plot tdif histogram
@@ -312,7 +330,7 @@ for i in range(barNum):
         # Determine minimum time bin we're concerned with (corresponds to max. energy)
         # 10 MeV neutron has flight time of ~9 ns, let's set the min. to 10
         
-        binEdgesRevised = np.arange(10, barTagWindow, 2* fwhm[i])
+        binEdgesRevised = np.arange(10, barTagWindow, fwhm[i])
         timeBinCenters =  (binEdgesRevised[:-1] + binEdgesRevised[1:]) / 2 
         
         energies = TOFtoEnergy( timeBinCenters )
@@ -338,14 +356,14 @@ for i in range(barNum):
             
             # Find data from bin
             indicesInBin = np.argwhere(np.logical_and( dtCorrected > lowerBound, dtCorrected < upperBound     ) )
-            lightOutputs = np.sort( barCoinc[0,indicesInBin]*csCals[i][0] )
+            lightOutputs = np.sort( barCoinc[0,indicesInBin]*csCalsTof[i][0] )
             
 
             # Set LO bins
             # Choose max bin based on percentage of data to include
             sortedLO = np.sort(lightOutputs, axis=None)
             maxBin = sortedLO[ int(np.floor( len(sortedLO) * 0.99 )) ]
-            lightOutputBinEdges = np.linspace(0, maxBin + 500, 31)
+            lightOutputBinEdges = np.linspace(0, maxBin + 500, 41)
             lightOutputCenters = (lightOutputBinEdges[:-1] + lightOutputBinEdges[1:]) / 2
           
             # Plot LO hist for time bin
@@ -356,7 +374,7 @@ for i in range(barNum):
             # Draw vertical line at some percent of total counts
             countSum = 0
             pickoffIndex = 0
-            while countSum < 0.80 * np.sum(lightOutputHist ):
+            while countSum < 0.88 * np.sum(lightOutputHist ):
                 countSum += lightOutputHist[pickoffIndex]
                 pickoffIndex +=1
             
@@ -398,7 +416,8 @@ for i in range(barNum):
                         str( round(lowerEnergy,3) ) +'-' \
                         + str(round(upperEnergy,3)) + 'mev.png')
 
-            #plt.close()
+            if ~plotSlices:
+                plt.close()
             
             lightOutputVec[j] = minDerivLightOutput# lightOutput
             
